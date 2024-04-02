@@ -1,14 +1,13 @@
-import argparse
-import csv
 
-import matplotlib.pyplot as plt
+import csv
+import yaml
+from pathlib import Path
 import numpy as np
 from ase import geometry
 from ase.io import read
 
 import constants as const
-from conversions import SystemOptimizedValues
-
+from system_optimized_values import SystemOptimizedValues
 
 class SystemVibrationModesInfo:
     def __init__(self,
@@ -22,84 +21,51 @@ class SystemVibrationModesInfo:
         self.num_atoms = number_of_atoms
         self.num_modes = number_of_modes
 
-
-class ResultData:
-    def __init__(self):
-        self.__optical_absorption_spectrum = None
-        self.__photon_e = None
-
-    @property
-    def optical_absorption_spectrum(self):
-        return self.__optical_absorption_spectrum
-
-    @optical_absorption_spectrum.setter
-    def optical_absorption_spectrum(self, value):
-        self.__optical_absorption_spectrum = value
-
-    @property
-    def photon_e(self):
-        return self.__photon_e
-
-    @photon_e.setter
-    def photon_e(self, value):
-        self.__photon_e = value
-
-
-def parse_args() -> any:
+def get_vib_modes(qpoint_yaml_file: Path) -> SystemVibrationModesInfo:
     """
-    Parses system arguments.
-    Returns args: contains sys arguments added by user.
-    """
-    parser = argparse.ArgumentParser()
-    parser.add_argument("-gs", "--ground-state-poscar", type=str,
-                        help="a ground state POSCAR file")
-    parser.add_argument("-es", "--excited-state-poscar", type=str,
-                        help="an excited state POSCAR file")
-    parser.add_argument("-ph", "--phonon-file", type=str,
-                        help="a ground state qpoints.yaml file")
-    parser.add_argument("-temp", "--temperature", type=float,
-                        help="temperature (K)")
-    parser.add_argument("-zpl", "--zpl-energy", type=float,
-                        help="zero-point line energy (eV)")
-    return parser.parse_args()
-
-
-def get_vib_modes(qpoint_yaml_file: str) -> SystemVibrationModesInfo:
-    """
-    Takes the address the qpoints.yaml file.
-    Returns an object contains vibrational modes eigen-modes information.
+    Parses the YAML file at the given path to extract vibration modes
+    and eigenmodes information.
+    
+    Args:
+        qpoint_yaml_file (Path): The path to a qpoints.yaml file.
+    
+    Returns:
+        SystemVibrationModesInfo: An object containing vibration eigenmodes info.
+    
+    Raises:
+        ValueError: If the file does not contain valid vibration modes information.
     """
     frequency = []
     eigenvector = []
-    num_of_modes: int = 0
-    num_of_atoms: int = 0
-    f = open(qpoint_yaml_file, 'r')
-    for line in f:
-        if 'nqpoint:' in line:
-            number_of_qpts = int(line.split()[-1])
-            if number_of_qpts != 1:
-                print('*** Only Gamma-point phonons! ***')
-                break
-        if 'natom:  ' in line:
-            num_of_atoms = int(line.split()[-1])
-            num_of_modes = 3 * num_of_atoms
-        if 'frequency: ' in line:
-            frequency.append(float(line.split()[-1]))
-        if '- # atom ' in line:
-            coord = []
-            for i in range(3):
-                x = next(f).split()[2]
-                coord.append(float(x[:-1]))
-            eigenvector.append(coord)
-    vibrational_modes = np.reshape(eigenvector, (num_of_modes, -1))
-    f.close()
+    number_of_modes: int = 0
+    number_of_atoms: int = 0
+    with open(qpoint_yaml_file, 'r') as yamlfile:
+        for line in yamlfile:
+            
+            if 'nqpoint:' in line:
+                number_of_qpts = int(line.split()[-1])
+                if number_of_qpts != 1:
+                    print('*** Only Gamma-point phonons! ***')
+                    break
+            if 'natom:  ' in line:
+                number_of_atoms = int(line.split()[-1])
+                number_of_modes = 3 * number_of_atoms
+            if 'frequency: ' in line:
+                frequency.append(float(line.split()[-1]))
+            if '- # atom ' in line:
+                coord = []
+                for i in range(3):
+                    x = next(yamlfile).split()[2]
+                    coord.append(float(x[:-1]))
+                eigenvector.append(coord)
+        vibrational_modes = np.reshape(eigenvector, (number_of_modes, -1))
 
-    assert num_of_modes != 0 or num_of_atoms != 0, f"'{qpoint_yaml_file}' is not valid file!"
+    assert number_of_modes != 0 or number_of_atoms != 0, f"'{qpoint_yaml_file}' is not valid file!"
 
     system_vib_mode_info = SystemVibrationModesInfo(phonon_vibrational_modes=vibrational_modes,
                                                     phonon_energy_thz=frequency,
-                                                    number_of_atoms=num_of_atoms,
-                                                    number_of_modes=num_of_modes)
+                                                    number_of_atoms=number_of_atoms,
+                                                    number_of_modes=number_of_modes)
     return system_vib_mode_info
 
 
@@ -244,34 +210,7 @@ def write_to_file(filename, x, y):
         writer.writerows(zip(x, y))
 
 
-def save_plot(zpl_energy, algorithm_result: ResultData, show=True, write=True):
-    plt.plot(zpl_energy - algorithm_result.photon_e, algorithm_result.optical_absorption_spectrum, linestyle='--',
-             color='blue')
-    pl_x = zpl_energy - algorithm_result.photon_e
-    pl_y = algorithm_result.optical_absorption_spectrum
-
-    if write:
-        write_to_file('pl_spectrum_I.dat', pl_x, pl_y)
-
-    if show:
-        plt.show()
 
 
-if __name__ == "__main__":
-    args = parse_args()
 
-    svmi = get_vib_modes(args.phonon_file)
-    disp_arr = get_displacements(args.ground_state_poscar, args.excited_state_poscar)
-    mass_arr = get_ground_state_masses(args.ground_state_poscar)
-    sov = SystemOptimizedValues(svmi, mass_arr, args.zpl_energy)
 
-    partialhrf = partial_hrf(svmi, mass_arr, sov.diag_masses, disp_arr)
-    hrfspectrum = spectral_function(partialhrf, sov.ngrids, sov.energy, sov.phonE_eV)
-    genfunction = generating_function(sov.total_time, sov.energy, sov.dE, hrfspectrum, args.temperature)
-    plspectrum = line_shape(genfunction, sov.T)
-
-    alg_result = ResultData()
-    alg_result.optical_absorption_spectrum = plspectrum
-    alg_result.photon_e = sov.photon_energy
-
-    save_plot(args.zpl_energy, alg_result, show=True, write=True)

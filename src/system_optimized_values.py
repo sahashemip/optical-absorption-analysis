@@ -4,6 +4,15 @@ import constants as cnts
 
 
 class SystemOptimizedValues:
+    '''
+    A class for optimization, and reconstruction of
+    key quantities that are used throughout formulations.
+    
+    Attributes:
+    
+    Methods:
+    
+    '''
     def __init__(self, smvi, masses, zpl_energy):
         self.smvi = smvi
         self.masses = masses
