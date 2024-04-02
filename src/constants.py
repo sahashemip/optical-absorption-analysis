@@ -1,3 +1,7 @@
+''' This module contains constants for unit conversions
+    and Boltzmann constant (KB).
+'''
+
 from typing_extensions import Final
 
 TERA: Final[float] = 1e12
