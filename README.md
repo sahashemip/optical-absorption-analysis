@@ -1,4 +1,8 @@
-# PROJECT NAME
+<p align="center">
+  <img src="./image.png" alt="Logo" width="300"/>
+</p>
+
+# Optical Absorption Analysis
 Description
 
 ## how to install requirement
