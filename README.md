@@ -3,16 +3,17 @@
 </p>
 
 # Optical Absorption Analysis
-Description
+This repository provides a suite of tools designed to enhance evaluations of defect centers in semiconducting materials through photoluminescence (PL) spectrum calculations.
 
-## how to install requirement
+
+## Installation
 ```bash
 python3 -m venv .venv
 source ./.venv/bin/activate
 pip3 install -r requirements.txt
 ```
 
-## How to run:
+## How To Use:
 This is a help
 ```bash
 python pl_spectrum.py -h
