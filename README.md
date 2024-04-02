@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="./image.png" alt="Logo" width="300"/>
+  <img src="./image.png" alt="Logo" width="450"/>
 </p>
 
 # Optical Absorption Analysis
@@ -13,7 +13,7 @@ source ./.venv/bin/activate
 pip3 install -r requirements.txt
 ```
 
-## How To Use:
+## How To Use
 This is a help
 ```bash
 python pl_spectrum.py -h
@@ -34,8 +34,11 @@ optional arguments:
                         Enter zero point energy in eV
 ```
 
-sample:
+#### sample:
 ```bash
 python pl_spectrum.py -gs POSCAR-gs -es POSCAR-ex -ph qpoints.yaml -temp 300 -zpl 1.2
 ```
 
+## Related
+<https://journals.aps.org/prb/abstract/10.1103/PhysRevB.103.125203>
+<https://journals.aps.org/prb/abstract/10.1103/PhysRevB.101.144109>
