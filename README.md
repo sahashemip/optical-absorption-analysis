@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="./image.png" alt="Logo" width="450"/>
+  <img src="./pl.png" alt="Logo" width="450"/>
 </p>
 
 # Optical Absorption Analysis
