@@ -9,65 +9,6 @@ from ase.io import read
 import constants as const
 from system_optimized_values import SystemOptimizedValues
 
-class SystemVibrationModesInfo:
-    def __init__(self,
-                 phonon_vibrational_modes: np.array,
-                 phonon_energy_thz: np.array,
-                 number_of_atoms: int,
-                 number_of_modes: int):
-        """Returns the vibrational modes related information."""
-        self.phonon_vibrational_modes = phonon_vibrational_modes
-        self.phonon_energy = phonon_energy_thz
-        self.num_atoms = number_of_atoms
-        self.num_modes = number_of_modes
-
-def get_vib_modes(qpoint_yaml_file: Path) -> SystemVibrationModesInfo:
-    """
-    Parses the YAML file at the given path to extract vibration modes
-    and eigenmodes information.
-    
-    Args:
-        qpoint_yaml_file (Path): The path to a qpoints.yaml file.
-    
-    Returns:
-        SystemVibrationModesInfo: An object containing vibration eigenmodes info.
-    
-    Raises:
-        ValueError: If the file does not contain valid vibration modes information.
-    """
-    frequency = []
-    eigenvector = []
-    number_of_modes: int = 0
-    number_of_atoms: int = 0
-    with open(qpoint_yaml_file, 'r') as yamlfile:
-        for line in yamlfile:
-            
-            if 'nqpoint:' in line:
-                number_of_qpts = int(line.split()[-1])
-                if number_of_qpts != 1:
-                    print('*** Only Gamma-point phonons! ***')
-                    break
-            if 'natom:  ' in line:
-                number_of_atoms = int(line.split()[-1])
-                number_of_modes = 3 * number_of_atoms
-            if 'frequency: ' in line:
-                frequency.append(float(line.split()[-1]))
-            if '- # atom ' in line:
-                coord = []
-                for i in range(3):
-                    x = next(yamlfile).split()[2]
-                    coord.append(float(x[:-1]))
-                eigenvector.append(coord)
-        vibrational_modes = np.reshape(eigenvector, (number_of_modes, -1))
-
-    assert number_of_modes != 0 or number_of_atoms != 0, f"'{qpoint_yaml_file}' is not valid file!"
-
-    system_vib_mode_info = SystemVibrationModesInfo(phonon_vibrational_modes=vibrational_modes,
-                                                    phonon_energy_thz=frequency,
-                                                    number_of_atoms=number_of_atoms,
-                                                    number_of_modes=number_of_modes)
-    return system_vib_mode_info
-
 
 def get_displacements(gs_file: str, es_file: str):
     """Returns atomic displacement as a flattened numpy array."""
@@ -142,11 +83,11 @@ def partial_hrf(svmi_obj: SystemVibrationModesInfo, masses, diag_mass, displacem
     hrf = []
     conf_coordinate = []
     for mode in range(svmi_obj.num_modes):
-        norm_phon_mode = normalization(np.array(svmi_obj.phonon_vibrational_modes[mode]), masses)
+        norm_phon_mode = normalization(np.array(svmi_obj.phonon_eigenvectors[mode]), masses)
         conf_coord_mode = deltaq_mode(displacements, norm_phon_mode, diag_mass)  # vec
         # TODO: add one more return for printing out into a file later on.
         conf_coordinate.append(conf_coord_mode ** 2)
-        s_m = partial_hrf_mode(svmi_obj.phonon_energy[mode], conf_coord_mode)
+        s_m = partial_hrf_mode(svmi_obj.phonon_eigenvalues[mode], conf_coord_mode)
         hrf.append(s_m)
     hrf[0] = hrf[1] = hrf[2] = 0
     return hrf
@@ -212,5 +153,5 @@ def write_to_file(filename, x, y):
 
 
 
-
+print(parse_vibration_modes('qpoints.yaml'))
 
