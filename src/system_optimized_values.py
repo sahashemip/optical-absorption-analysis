@@ -1,5 +1,5 @@
 import numpy as np
-
+from ase.io import read
 import constants as cnts
 
 
@@ -16,7 +16,7 @@ class SystemOptimizedValues:
     def __init__(self, smvi, masses, zpl_energy):
         self.smvi = smvi
         self.masses = masses
-        self.zpl_energy = zpl_energy
+        self.zpl_energy = zpl_energy       
 
     @property
     def diag_masses(self):

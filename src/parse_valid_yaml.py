@@ -5,7 +5,7 @@ import numpy as np
 
 class SystemVibrationModesInfo:
     """
-    Stores and provides access to the vibrational modesinformation of a system.
+    Stores and provides access to the vibrational modes information of a system.
     This class encapsulates the eigenvectors, eigenvalues, and the total
     number of atoms associated with the vibrational modes of a crystalline system.
 
