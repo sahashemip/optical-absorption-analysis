@@ -1,4 +1,3 @@
-
 from pathlib import Path
 import numpy as np
 from ase import geometry
@@ -18,8 +17,7 @@ class PhononSideBand:
                  accepted_cell_deviation: float = 0.1
                  ) -> None:
         """
-        Initialize PhononSideBand with paths to the ground and excited state POSCAR
-        files and SystemVibrationModesInfo object.
+        Initializes PhononSideBand instance.
 
         Args:
         - ground_state_file (Path): Path to the ground state POSCAR file.
@@ -34,11 +32,11 @@ class PhononSideBand:
             or the excited_state_file does not exist.
         """
         if not ground_state_file.exists():
-            raise FileNotFoundError("Ground state file not found: {ground_state_file}")
+            raise FileNotFoundError("Ground state file not found: {ground_state_file}!")
         self.ground_state = read(ground_state_file)
 
         if not excited_state_file.exists():
-            raise FileNotFoundError("Excited state file not found: {excited_state_file}")
+            raise FileNotFoundError("Excited state file not found: {excited_state_file}!")
         self.excited_state = read(excited_state_file)
         
         if self._is_ground_match_to_excited_state():
@@ -47,111 +45,37 @@ class PhononSideBand:
             self.number_of_atoms = system_optimized_values_obj.number_atoms
             self.accepted_cell_deviation = accepted_cell_deviation
 
-    @staticmethod
-    def read_poscar(file_path: Path) -> np.ndarray:
-        """
-        Reads a POSCAR file and returns the structure as an ASE Atoms object.
-        
-        Args:
-            file_path (Path): The path to the POSCAR file.
-
-        Returns:
-             np.ndarray: The structure read from the POSCAR file.
-
-        Raises:
-            IOError: If there is an issue reading the file.
-        """
-        if not read(file_path):
-            raise IOError(f"Error reading ground state file: {file_path}")
-        return read(file_path)
-
-    @staticmethod
-    def get_cell(file_path: Path) -> np.ndarray:
-        """
-        Retrieves the cell parameters from a POSCAR file.
-
-        Args:
-            file_path (Path): The path to the POSCAR file.
-
-        Returns:
-            np.ndarray: The lattice parameters from the POSCAR file.
-        """
-        strcuture = PhononSideBand.read_poscar(file_path)
-        return strcuture.get_cell()
-
-    @staticmethod
-    def get_positions(file_path: Path) -> np.ndarray:
-        """
-        Retrieves the cell parameters from a POSCAR file.
-
-        Args:
-            file_path (Path): The path to the POSCAR file.
-
-        Returns:
-            np.ndarray: The atomic positions from the POSCAR file.
-        """
-        strcuture = PhononSideBand.read_poscar(file_path)
-        return strcuture.get_positions()
-
-    @staticmethod
-    def get_number_atoms(file_path: Path) -> int:
-        """
-        Retrieves the number of atoms from a POSCAR file.
-
-        Args:
-            file_path (Path): The path to the POSCAR file.
-
-        Returns:
-            int: The number of atoms from the POSCAR file.
-        """
-        strcuture = PhononSideBand.read_poscar(file_path)
-        return strcuture.get_number_of_atoms()
-
-    @staticmethod
-    def get_chemcial_symbols(file_path: Path) -> list[str]:
-        """
-        Returns a list of chemical symbols from a POSCAR file.
-
-        Args:
-            file_path (Path): The path to the POSCAR file.
-
-        Returns:
-            list[str]: Chemical symbols from the POSCAR file.
-        """
-        strcuture = PhononSideBand.read_poscar(file_path)
-        return strcuture.get_chemical_symbols()
-
     def _check_cell_parameters_match(self):
-        cell_ground_state = self.get_cell(self.ground_state)
-        cell_excited_state = self.get_cell(self.excited_state)
+        cell_ground_state = utils.get_cell(self.ground_state)
+        cell_excited_state = utils.get_cell(self.excited_state)
         cell_difference = np.abs(cell_ground_state - cell_excited_state)
         
         if np.any(cell_difference > self.accepted_cell_deviation):
-            raise ValueError('Large deviation between the ground and excited states.')
+            raise ValueError("Cell deviation between the ground and excited states!")
 
     def _check_number_of_atoms_match(self):
-        ground_state_number_of_atoms = self.get_number_of_atoms(self.ground_state)
-        excited_state_number_of_atoms = self.get_number_of_atoms(self.excited_state)
+        ground_state_number_of_atoms = utils.get_number_of_atoms(self.ground_state)
+        excited_state_number_of_atoms = utils.get_number_of_atoms(self.excited_state)
         
         if ground_state_number_of_atoms != excited_state_number_of_atoms:
-            raise ValueError('Discrepancy between the number of atoms in ground and excited state structures.')
+            raise ValueError("Ground and excited states' number of atoms NOT match!")
 
     def _check_chemical_symbols_match(self):
-        ground_state_atoms = self.get_chemical_symbols(self.ground_state)
-        excited_state_atoms = self.get_chemical_symbols(self.excited_state)
+        ground_state_atoms = utils.get_chemical_symbols(self.ground_state)
+        excited_state_atoms = utils.get_chemical_symbols(self.excited_state)
         
         if ground_state_atoms != excited_state_atoms:
-            raise ValueError('Atoms of the ground state are not the same as in the excited state.')
+            raise ValueError('Atoms of the ground and excited states are NOT similar!')
 
     def _is_ground_match_to_excited_state(self) -> bool:
         """
-        Checks if the ground state matches the excited state based on several criteria:
+        Checks if the ground state matches the excited state based on:
         - Cell parameters within an accepted deviation.
         - Equal number of atoms.
         - Matching chemical symbols.
 
         Returns:
-            bool: True if all criteria are met.
+        - bool: True if all criteria are met.
 
         Raises:
             ValueError: If any criterion is not met.
@@ -169,14 +93,15 @@ class PhononSideBand:
         Returns:
         - A numpy array containing the atomic displacements.
         """
-        ground_state_positions = PhononSideBand.get_positions(self.ground_state)
-        excited_state_positions = PhononSideBand.get_positions(self.excited_state)
+        ground_state_positions = utils.get_positions(self.ground_state)
+        excited_state_positions = utils.get_positions(self.excited_state)
+        ground_state_cell = utils.get_cell(self.ground_state)
         distances = geometry.get_distances(ground_state_positions,
                                            excited_state_positions,
-                                           cell=self.ground_state.get_cell(),
+                                           cell=ground_state_cell,
                                            pbc=True)
     
-        number_atoms = len(self.ground_state.get_positions())
+        number_atoms = utils.get_number_atoms(self.ground_state)
         displacements = [distances[0][i][i] for i in range(number_atoms)]
     
         return np.array(displacements).reshape(-1, 1)
@@ -188,7 +113,6 @@ class PhononSideBand:
         Returns:
         - A numpy array containing the atomic masses.
         """
-        
         return self.ground_state.get_masses()
 
     def normalize_eigenfunction(self, eigenfuntion: np.ndarray) -> np.ndarray:

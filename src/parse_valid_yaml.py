@@ -6,22 +6,31 @@ import numpy as np
 class SystemVibrationModesInfo:
     """
     Stores and provides access to the vibrational modes information of a system.
-    This class encapsulates the eigenvectors, eigenvalues, and the total
-    number of atoms associated with the vibrational modes of a crystalline system.
+    This class encapsulates eigenvectors, eigenvalues, and number of atoms
+    associated with the vibrational modes of a crystalline system.
 
-    Attributes:
-        eigenvectors (np.ndarray): An array of eigenvectors associated with the vibrational
-            modes of the system. Each eigenvector represents a vibrational mode.
-        eigenvalues (np.ndarray): An array of eigenvalues corresponding to the vibrational
-            frequencies of the modes represented by the eigenvectors.
-        number_atoms (int): The total number of atoms in the system.
+    Args:
+    - eigenvectors (np.ndarray): an array of vibrational eigenvectors.
+    - eigenvalues (np.ndarray): an array of vibrational frequencies.
+    - number_atoms (int): the number of atoms in the system.
     """
-    
-    def __init__(self,
-                 eigenvectors: np.array,
-                 eigenvalues: np.array,
-                 number_atoms: int):
-        """Returns the vibrational modes related information."""
+
+    def __init__(self, eigenvectors: np.array, eigenvalues: np.array, number_atoms: int):
+        """
+        Initializes an instance of SystemVibrationModesInfo.
+
+        Args:
+        - eigenvectors (np.ndarray): an array of vibrational mode's eigenvectors.
+        - eigenvalues (np.ndarray): an array of vibrational mode's energies.
+            Should align with the `eigenvectors` array.
+        - number_atoms (int): the number of atoms in the system.
+
+        Raises:
+            ValueError: If the lengths of `eigenvectors` and `eigenvalues` do not match.
+        """
+        if len(eigenvectors) != len(eigenvalues):
+            raise ValueError("Length of eigenvectors does not match number of eigenvalues.")
+
         self.eigenvectors = eigenvectors
         self.eigenvalues = eigenvalues
         self.number_atoms = number_atoms
@@ -29,33 +38,46 @@ class SystemVibrationModesInfo:
 
 class ParsePhonopyYamlFile:
     """
-    Extracts abd
+    Parses Phonopy generated YAML file that conatins the vibrational modes' information of 
+    only the gamma-point.
+    
+    This class extracts vibrational mode's eigenvector, eigenvalues and the number of
+    atoms. It also check YAML file structure correctness.
+    
+    Args:
+    - yamlfile (Path): path to YAML file.
     
     Methods:
-        - extract_vibration_eigenvectors
-        - extract_yaml_values_by_key
-        - set_system_vib_mode_info
-        - is_yaml_valid
+    - _extract_vibration_eigenvectors
+    - _extract_yaml_values_by_key
+    - _is_yaml_valid
+    - get_vibration_data
     """
     
     def __init__(self, yamlfile: Path) -> None:
-        self.yamlfile = yamlfile
-        
-        if not self.file_path.exists():
-            raise FileNotFoundError(
-                f"The file {self.yamlfile} does not exist."
-                )
-
-    def extract_yaml_values_by_key(self, key: str) -> Optional[list[float]]:
         """
-        Extracts values associated with a specified 'key' from a given YAML file.
+        Initializes an instance of ParsePhonopyYamlFile.
 
         Args:
-            key (str): Key parameter for a dictionary.
+        - yamlfile (Path): path to YAML file.
+
+        Raises:
+            FileNotFoundError: If file not found in the given path.
+        """
+        self.yamlfile = yamlfile
+        if not self.yamlfile.exists():
+            raise FileNotFoundError(f"File {self.yamlfile} does not exist!")
+        
+
+    def _extract_yaml_values_by_key(self, key: str) -> Optional[list[float]]:
+        """
+        Extracts values related to a specified 'key' from the given YAML file.
+
+        Args:
+        - key (str): Key parameter for a dictionary.
         
         Returns:
-            Optional[List[float]]: A list of extracted values as floats,
-            if found; otherwise, None.
+        - A list of extracted values as floats, if found; otherwise, None.
         """
         list_of_values = []
         with open(self.yamlfile, 'r') as file:
@@ -66,12 +88,12 @@ class ParsePhonopyYamlFile:
                 return list_of_values
         return None
 
-    def extract_vibration_eigenvectors(self) -> Optional[list[list[float]]]:
+    def _extract_vibration_eigenvectors(self) -> Optional[list[list[float]]]:
         """
-        Extracts vibration eigenvectors from a given YAML file.
+        Extracts vibrational eigenvectors from the given YAML file.
     
         Returns:
-            Optional[List[float]]: A nested list of extracted eigenvector values as floats,
+        - A nested list of extracted eigenvector values as floats,
             if found; otherwise, None.
         """
         eigenvectors = []
@@ -87,33 +109,13 @@ class ParsePhonopyYamlFile:
                 return eigenvectors
         return None
 
-    def set_system_vib_mode_info(self) -> SystemVibrationModesInfo:
-        """
-        Creates a SystemVibrationModesInfo object from a YAML file.
-
-        Returns:
-            SystemVibrationModesInfo: An object populated with vibration mode data.
-        """
-    
-        number_atoms_values = self.extract_yaml_values_by_key('natom:  ')
-        frequency_values = self.extract_yaml_values_by_key('frequency: ')
-        eigenvectors = self.extract_vibration_eigenvectors()
-
-        number_atoms = int(number_atoms_values[0])
-        eigenvalues = np.array(frequency_values, dtype=float)
-        reshaped_eigenvectors = np.reshape(eigenvectors, (3 * number_atoms, -1))
-    
-        return SystemVibrationModesInfo(eigenvectors=reshaped_eigenvectors,
-                                        eigenvalues=eigenvalues,
-                                        number_atoms=number_atoms)
-
-    def is_yaml_valid(self) -> bool:
+    def _is_yaml_valid(self) -> bool:
         """
         Validates the structure and essential keys of a given YAML file
         obtained from Phonopy analysis.
 
         Returns:
-            bool: True if the YAML file's format and required keys are present,
+        - bool: True if the YAML file's format and required keys are present,
             otherwise raises ValueError.
 
         Raises:
@@ -122,8 +124,8 @@ class ParsePhonopyYamlFile:
             if there are multiple entries for a single key where only one is expected.
         """
         required_keys = ['nqpoint:', 'natom:  ', 'frequency: ']
-        values = {key: self.extract_yaml_values_by_key(key) for key in required_keys}
-        eigenvectors = self.extract_vibration_eigenvectors()
+        values = {key: self._extract_yaml_values_by_key(key) for key in required_keys}
+        eigenvectors = self._extract_vibration_eigenvectors()
 
         for key, value in values.items():
             if value is None:
@@ -134,3 +136,30 @@ class ParsePhonopyYamlFile:
         if eigenvectors is None:
             raise ValueError("Eigenvectors are missing in the YAML file.")
         return True
+
+    def get_vibration_data(self) -> SystemVibrationModesInfo:
+        """
+        Creates a SystemVibrationModesInfo object if the given YAML file is valid.
+
+        Returns:
+        - SystemVibrationModesInfo: an object populated with vibration mode data.
+        """
+        
+        self._is_yaml_valid()
+    
+        number_atoms_values = self._extract_yaml_values_by_key('natom:  ')
+        frequency_values = self._extract_yaml_values_by_key('frequency: ')
+        eigenvectors = self._extract_vibration_eigenvectors()
+
+        number_atoms = int(number_atoms_values[0])
+        eigenvalues = np.array(frequency_values, dtype=float)
+        reshaped_eigenvectors = np.reshape(eigenvectors, (3 * number_atoms, -1))
+    
+        return SystemVibrationModesInfo(eigenvectors=reshaped_eigenvectors,
+                                        eigenvalues=eigenvalues,
+                                        number_atoms=number_atoms)
+
+
+obj = ParsePhonopyYamlFile(Path('qpoints.yaml'))
+SystemVibrationModesInfo_obj = obj.get_vibration_data()
+print(SystemVibrationModesInfo_obj.eigenvalues.shape)
