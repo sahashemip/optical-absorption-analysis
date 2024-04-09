@@ -1,5 +1,4 @@
 import numpy as np
-from ase.io import read
 import constants as cnts
 
 

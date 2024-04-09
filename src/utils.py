@@ -45,7 +45,7 @@ def get_angular_frequency(frequency_thz: float) -> float:
     Returns:
     - Angular frequency in radians per second.
     """
-    return 2 * np.pi * frequency_thz
+    return 2 * const.TERA * np.pi * frequency_thz
 
 def calculate_boltzmann_distribution(energy: float, temperature: float) -> float:
     """
@@ -120,9 +120,9 @@ def get_number_atoms(file_path: Path) -> int:
     - int: The number of atoms from the POSCAR file.
     """
     strcuture = read_poscar(file_path)
-    return strcuture.get_number_of_atoms()
+    return strcuture.get_global_number_of_atoms()
 
-def get_chemcial_symbols(file_path: Path) -> list[str]:
+def get_chemical_symbols(file_path: Path) -> list[str]:
     """
     Returns a list of chemical symbols from a POSCAR file.
 
