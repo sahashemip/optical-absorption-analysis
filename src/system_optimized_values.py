@@ -59,7 +59,7 @@ class SystemOptimizedValues:
         return cnts.HBAR_TO_EVS * cnts.TERA * 2 * np.pi * np.array(self.smvi.phonon_energy)
 
     @property
-    def dq2_units(self):
+    def dq2_units_convers(self):
         return (cnts.ANGSTROM ** 2) * cnts.AMU_TO_KG * cnts.JOULE_TO_EV
 
     @property
