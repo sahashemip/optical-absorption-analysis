@@ -7,9 +7,9 @@ import constants as const
 import utils
 import time
 
-from system_optimized_values import SystemOptimizedValues as sov
 from parse_valid_yaml import SystemVibrationModesInfo
 from parse_valid_yaml import ParsePhonopyYamlFile
+
 
 class PhononSideBand:
     """
@@ -20,6 +20,7 @@ class PhononSideBand:
         self,
         ground_state_file: Path,
         excited_state_file: Path,
+        zero_phonon_line: float,
         system_vibration_data: SystemVibrationModesInfo,
         accepted_cell_deviation: float = 0.1,
     ) -> None:
@@ -29,6 +30,7 @@ class PhononSideBand:
         Args:
         - ground_state_file (Path): Path to the ground state POSCAR file.
         - excited_state_file (Path): Path to the excited state POSCAR file.
+        - zero_phonon_line (float): Zero Phonon Line energy in eV.
         - system_optimized_values_obj (SystemVibrationModesInfo): Stores vibration
             modes information including eigenvectors, eigenvalues, and number of atoms.
         - accepted_cell_deviation (float): accepted maximum value of the ground and
@@ -37,6 +39,7 @@ class PhononSideBand:
         Raises:
             FileNotFoundError: If either the ground_state_file
             or the excited_state_file does not exist.
+            ValueError: If zero_phonon_line is negative.
         """
         if not ground_state_file.exists():
             raise FileNotFoundError("Ground state file not found: {ground_state_file}!")
@@ -47,6 +50,10 @@ class PhononSideBand:
                 "Excited state file not found: {excited_state_file}!"
             )
         self.excited_state = excited_state_file
+
+        if zero_phonon_line < 0:
+            raise ValueError("ZPL must be positive!")
+        self.zero_phonon_line = zero_phonon_line
 
         self.eigenvalues = system_vibration_data.eigenvalues
         self.eigenvectors = system_vibration_data.eigenvectors
@@ -161,10 +168,12 @@ class PhononSideBand:
 
         return weighted_eigenfunction / np.sqrt(norm_value_square)
 
-    def _get_mode_configuration_coordinates(self,
-                                            disp_vector: np.ndarray,
-                                            sqrt_mass_matrix: np.ndarray,
-                                            eigenfunction: np.ndarray) -> float:
+    def _get_mode_configuration_coordinates(
+        self,
+        disp_vector: np.ndarray,
+        sqrt_mass_matrix: np.ndarray,
+        eigenfunction: np.ndarray,
+    ) -> float:
         """
         Calculates the configurational coordinates from displacement vectors,
         phonon vibrational modes, and square root of atomic masses.
@@ -181,6 +190,7 @@ class PhononSideBand:
             diagonalized mass matrix, and displacement vectors.
         """
         norm_eigenfunc = self.normalize_eigenfunction(eigenfunction).reshape(1, -1)
+
         return float((norm_eigenfunc @ (sqrt_mass_matrix @ disp_vector)).ravel()[0])
 
     def get_configuration_coordinates(self) -> list[float]:
@@ -193,21 +203,24 @@ class PhononSideBand:
         number_of_modes = 3 * utils.get_number_atoms(self.ground_state)
         disp_vector = self.get_displacements().reshape(-1, 1)
         sqrt_mass_matrix = np.sqrt(self._diagonalize_masses_matrix())
-        
+
         configuration_coordinates = [
-            self._get_mode_configuration_coordinates(disp_vector,
-                                                     sqrt_mass_matrix,
-                                                     self.eigenvectors[mode])
+            self._get_mode_configuration_coordinates(
+                disp_vector, sqrt_mass_matrix, self.eigenvectors[mode]
+            )
             for mode in range(number_of_modes)
         ]
 
+        # TODO: save data to a text file
         return configuration_coordinates
 
-    def _get_mode_partial_huang_rhys_factor(self,
-                                            disp_vector: np.ndarray,
-                                            sqrt_mass_matrix: np.ndarray,
-                                            eigenvalue: float,
-                                            eigenfunction: np.ndarray) -> float:
+    def _get_mode_partial_huang_rhys_factor(
+        self,
+        disp_vector: np.ndarray,
+        sqrt_mass_matrix: np.ndarray,
+        eigenvalue: float,
+        eigenfunction: np.ndarray,
+    ) -> float:
         """
         Calculates the partial Huang-Rhys factor (HRF) based on
         the vibrational mode's frequency and configuration coordinates.
@@ -222,18 +235,14 @@ class PhononSideBand:
         - float: The partial Huang-Rhys factor (dimensionless) for the specified vibrational mode.
         """
         angular_freq = utils.get_angular_frequency(eigenvalue)
-        configuration_coordinate = self._get_mode_configuration_coordinates(disp_vector,
-                                                                            sqrt_mass_matrix,
-                                                                            eigenfunction)
+        configuration_coordinate = self._get_mode_configuration_coordinates(
+            disp_vector, sqrt_mass_matrix, eigenfunction
+        )
 
-        # TODO: fix it!
-        #    @property
-        #    def dq2_units(self):
-        #      return (cnts.ANGSTROM ** 2) * cnts.AMU_TO_KG * cnts.JOULE_TO_EV
-
-        # configuration_coordinate_squared = configuration_coordinate ** 2 * sov.dq2_units()
-        dq2_unit = (const.ANGSTROM**2) * const.AMU_TO_KG * const.JOULE_TO_EV
-        configuration_coordinate_squared = configuration_coordinate**2 * dq2_unit
+        unit_conversion = (const.ANGSTROM**2) * const.AMU_TO_KG * const.JOULE_TO_EV
+        configuration_coordinate_squared = (
+            configuration_coordinate**2
+        ) * unit_conversion
 
         return (angular_freq * configuration_coordinate_squared) / (
             2 * const.HBAR_TO_EVS
@@ -252,95 +261,117 @@ class PhononSideBand:
         sqrt_mass_matrix = np.sqrt(self._diagonalize_masses_matrix())
 
         huang_rhys_factor = [
-            self._get_mode_partial_huang_rhys_factor(disp_vector,
-                                                     sqrt_mass_matrix,
-                                                     self.eigenvalues[mode],
-                                                     self.eigenvectors[mode])
+            self._get_mode_partial_huang_rhys_factor(
+                disp_vector,
+                sqrt_mass_matrix,
+                self.eigenvalues[mode],
+                self.eigenvectors[mode],
+            )
             for mode in range(number_of_modes)
         ]
 
+        # acoustic rule
         huang_rhys_factor[:3] = [0.0] * 3
+
+        # TODO: save data to a text file
         return huang_rhys_factor
 
-    def _get_phonon_energy_grids(self, number_grids=500, buffer=2):
+    def _get_phonon_energy_grids(self, number_grids=1000, buffer=3):
         """
         Generates an array of energy grid points based on the phonon eigenvalues.
 
         Args:
-            number_grids (int): The number of points in the energy grid. Defaults to 500.
-            buffer (float): An additional energy buffer to extend beyond the maximum eigenvalue. Defaults to 2.
+        - number_grids (int): The number of points in the energy grid. Defaults to 500.
+        - buffer (float): An additional energy buffer to extend beyond the maximum eigenvalue.
+            Defaults to 2.
 
         Returns:
             np.ndarray: An array of linearly spaced energy grid points.
         """
+        unit_conversion = const.THz_TO_eV
+        
         if number_grids <= 0:
             raise ValueError("number_grids must be a positive integer")
-        max_eigenvalue = np.max(self.eigenvalues) + buffer
-        return np.linspace(0.01, max_eigenvalue, number_grids)
+        max_eigenvalue = (np.max(self.eigenvalues) + buffer) * unit_conversion
+        return np.linspace(0.001, max_eigenvalue, number_grids)
 
-
-    def huang_rhys_factor_spectral_function(self, number_grids=500, sigma=0.5) -> np.ndarray:
+    def huang_rhys_factor_spectral_function(
+        self, number_grids=1000, sigma=0.003
+    ) -> np.ndarray:
         """
         Calculates the spectral function by fitting a Gaussian function on partial Huang-Rhys
         factors corresponding to phonon vibrational mode energies (eigenvalues).
 
         Args:
-            number_grids (int): Number of energy grid points. Defaults to 500.
+        - number_grids (int): Number of energy grid points. Defaults to 500.
 
         Returns:
             np.ndarray: A numpy array representing the spectral function across the energy grid.
         """
+        unit_conversion = const.THz_TO_eV
 
-        energy_grids = self._get_phonon_energy_grids(number_grids)        
+        energy_grids = self._get_phonon_energy_grids(number_grids)
         spectral_function = np.zeros(number_grids)
-        
-        partial_factors = self.get_partial_huang_rhys_factor()
 
+        partial_factors = self.get_partial_huang_rhys_factor()
         for index, hrf_value in enumerate(partial_factors):
             spectral_function += hrf_value * np.vectorize(utils.fit_gaussian_functions)(
-                energy_grids, self.eigenvalues[index], sigma=sigma)
+                energy_grids, unit_conversion * self.eigenvalues[index], sigma=sigma
+            )
+
+        # TODO: save data to a text file
 
         return spectral_function
 
-    def generate_time_dependent_function(self,
-                                         temperature: float,
-                                         number_grids=500,
-                                         time_period=3.5, show_plot=True) -> np.ndarray:
+    def generate_time_dependent_function(
+        self, temperature: float, number_grids=1000, time_period=1
+    ) -> np.ndarray:
         """
         Calculate the time-dependent generating function for a given set of parameters.
         """
 
-        time_grids = np.linspace(-time_period, time_period, number_grids)
-        energy_grids = self._get_phonon_energy_grids()
-    
-        zpl =1.1
-        dE = zpl / number_grids
-    
-        hrf_spectral_function = self.huang_rhys_factor_spectral_function()
+        unit_conversion = const.PICO / const.HBAR_TO_EVS
 
-        time_dependent_spectral_function = np.zeros(number_grids, dtype=complex)
-        
-        temperature_factors = utils.calculate_boltzmann_distribution(energy_grids, temperature)
+        energy_grids = self._get_phonon_energy_grids(number_grids=number_grids)
+        dE = energy_grids[1] - energy_grids[0]
+        hrf_spectral_function = self.huang_rhys_factor_spectral_function(
+            number_grids=number_grids
+        )
+
+        #dE = self.zero_phonon_line / number_grids
+
+        time_grids = np.linspace(-time_period, time_period, number_grids)
+        time_dependent_spectral_function = np.zeros((number_grids,), dtype=complex)
 
         for j in range(number_grids):
             for i in range(number_grids):
-                temperature_factor = utils.calculate_boltzmann_distribution(energy_grids[i],
-                                                                            temperature)
-                exponential_factor = np.exp(1j * energy_grids[i] * time_grids[j])
-        
-                positive_term = hrf_spectral_function[i] * temperature_factor * exponential_factor
-                negative_term = hrf_spectral_function[i] * (1 + temperature_factor) * np.exp(-exponential_factor)
+                temperature_factor = utils.calculate_boltzmann_distribution(
+                    energy_grids[i], temperature
+                )
 
-                time_dependent_spectral_function[j] += (positive_term + negative_term) * dE
+                positive_term = (
+                    hrf_spectral_function[i]
+                    * temperature_factor
+                    * np.exp(1j * energy_grids[i] * time_grids[j] * unit_conversion)
+                )
+                negative_term = (
+                    hrf_spectral_function[i]
+                    * (1 + temperature_factor)
+                    * np.exp(-1j * energy_grids[i] * time_grids[j] * unit_conversion)
+                )
+
+                time_dependent_spectral_function[j] += (
+                    positive_term + negative_term
+                ) * dE
 
         return np.exp(time_dependent_spectral_function - time_dependent_spectral_function[0])
 
-    def calculate_optical_absorption_spectrum(self,
-                                              zero_phonon_line_energy: float,
-                                              temperature: float,
-                                              number_grids=500,
-                                              time_period=3.5,
-                                              ) -> np.ndarray:
+    def calculate_optical_absorption_spectrum(
+        self,
+        temperature: float,
+        number_grids=1000,
+        time_period=1,
+    ) -> np.ndarray:
         """
         Calculate the optical absorption spectrum from a given generating function.
 
@@ -352,19 +383,34 @@ class PhononSideBand:
         Returns:
         - np.ndarray: The scaled optical absorption spectrum.
         """
-        time_grids = np.linspace(-time_period, time_period, number_grids)
-        
         gen_func = self.generate_time_dependent_function(temperature=temperature)
+        time_grids = np.linspace(-time_period, time_period, number_grids)
+
         optical_absorption_spectrum = np.fft.ifft(gen_func) / (2 * np.pi)
 
-        photon_angular_frequency = (2 * np.pi / time_period / const.PICO) * np.arange(number_grids)
+        photon_angular_frequency = (2 * np.pi / time_period / const.PICO) * np.arange(
+            number_grids
+        )
         photon_energy = const.HBAR_TO_EVS * photon_angular_frequency
 
-        scaled_absorption_spectrum = (((zero_phonon_line_energy - photon_energy) / const.HBAR_TO_EVS) ** 3) * np.abs(optical_absorption_spectrum)
+        scaled_absorption_spectrum = (
+            ((self.zero_phonon_line - photon_energy) / const.HBAR_TO_EVS) ** 3
+        ) * np.abs(optical_absorption_spectrum)
+        
+        import matplotlib.pyplot as plt
+        plt.plot(photon_energy,
+                 scaled_absorption_spectrum,
+                 color='red',
+                 marker='o',
+                 markersize=1)
+        # plt.plot(time_grids, gen_func.real, 'b--')
+        plt.show()
         
         return scaled_absorption_spectrum
 
+
 import time
+
 start_time = time.time()
 
 obj1 = ParsePhonopyYamlFile(Path("qpoints.yaml"))
@@ -374,18 +420,15 @@ obj1 = ParsePhonopyYamlFile(Path("qpoints.yaml"))
 obj = PhononSideBand(
     ground_state_file=Path("POSCAR-gs"),
     excited_state_file=Path("POSCAR-es"),
+    zero_phonon_line=1.1,
     system_vibration_data=obj1.get_vibration_data(),
     accepted_cell_deviation=0.1,
 )
 
-print(np.sum(obj.get_configuration_coordinates()))
-print(np.sum(obj.get_partial_huang_rhys_factor()))
 
-obj.huang_rhys_factor_spectral_function()
+obj.calculate_optical_absorption_spectrum(temperature=30)
+#obj.huang_rhys_factor_spectral_function()
 
-obj.generate_time_dependent_function(temperature=300)
-
-obj.calculate_optical_absorption_spectrum(zero_phonon_line_energy=1.1, temperature=300)
 end_time = time.time()
 runtime = end_time - start_time
 print(f"Runtime: {runtime} seconds")

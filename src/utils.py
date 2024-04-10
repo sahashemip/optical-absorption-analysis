@@ -62,7 +62,7 @@ def calculate_boltzmann_distribution(energy: float, temperature: float) -> float
         ValueError: If temperature is negative.
     """
 
-    if temperature <= 0.0:
+    if temperature < 0.0:
         raise ValueError(f"Temperature must be positive!") 
     return 1 / (np.exp(energy / (const.KB * temperature)) - 1)
 
