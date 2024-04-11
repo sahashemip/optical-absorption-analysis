@@ -7,9 +7,11 @@ import constants as const
 import utils
 import time
 
-from parse_valid_yaml import SystemVibrationModesInfo
-from parse_valid_yaml import ParsePhonopyYamlFile
+# from parse_valid_yaml import SystemVibrationModesInfo
+# from parse_valid_yaml import ParsePhonopyYamlFile
 
+from parse_valid_outcar import SystemVibrationModesInfo
+from parse_valid_outcar import ParseOutcarFile
 
 class PhononSideBand:
     """
@@ -413,13 +415,14 @@ import time
 
 start_time = time.time()
 
-obj1 = ParsePhonopyYamlFile(Path("qpoints.yaml"))
-# print(obj1.get_vibration_data().eigenvectors)
+# obj1 = ParsePhonopyYamlFile(Path("qpoints.yaml"))
+# # print(obj1.get_vibration_data().eigenvectors)
 
+obj1 = ParseOutcarFile(Path("OUTCAR-ph.vasp"))
 
 obj = PhononSideBand(
-    ground_state_file=Path("POSCAR-gs"),
-    excited_state_file=Path("POSCAR-es"),
+    ground_state_file=Path("CONTCAR-gs.vasp"),
+    excited_state_file=Path("CONTCAR-ex-up.vasp"),
     zero_phonon_line=1.1,
     system_vibration_data=obj1.get_vibration_data(),
     accepted_cell_deviation=0.1,
