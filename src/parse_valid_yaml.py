@@ -68,9 +68,9 @@ class ParsePhonopyYamlFile:
         Raises:
             FileNotFoundError: If file not found in the given path.
         """
+        if not yamlfile.exists():
+            raise FileNotFoundError(f"File {yamlfile} does not exist!")
         self.yamlfile = yamlfile
-        if not self.yamlfile.exists():
-            raise FileNotFoundError(f"File {self.yamlfile} does not exist!")
 
     def _extract_yaml_values_by_key(self, key: str) -> Optional[list[float]]:
         """
